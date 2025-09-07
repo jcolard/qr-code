@@ -3,72 +3,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Générateur de QR Code</title>
+    <title>Flappy Bird</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
+        /* Styles généraux pour le corps de la page */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f2f5;
-        }
-        .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            width: 90%;
-            max-width: 400px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 1.5rem;
-        }
-        input[type="url"] {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-            margin-bottom: 1rem;
-            font-size: 1rem;
-        }
-        button {
-            width: 100%;
-            padding: 0.75rem;
-            border: none;
-            background-color: #007bff;
+            background-color: #3498db; /* Un joli bleu ciel */
+            font-family: 'Press Start 2P', cursive;
             color: white;
-            border-radius: 4px;
+            text-align: center;
+            overflow: hidden; /* Empêche les barres de défilement */
+        }
+
+        /* Conteneur principal du jeu */
+        .game-container {
+            position: relative;
+            border: 8px solid #2c3e50;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2), 0 6px 6px rgba(0,0,0,0.25);
+            background: url('https://placehold.co/800x600/87CEEB/FFFFFF?text=Background') no-repeat center center/cover;
+            overflow: hidden; /* S'assure que rien ne dépasse du canvas */
+        }
+        
+        /* Style du canvas où le jeu est dessiné */
+        canvas {
+            display: block;
+        }
+
+        /* Styles pour les écrans de jeu (accueil et fin) */
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .game-overlay h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 4px 4px 0 #2c3e50;
+        }
+        
+        .game-overlay p {
             font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        /* Style des boutons */
+        .button {
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-family: 'Press Start 2P', cursive;
+            background-color: #2ecc71; /* Vert */
+            color: white;
+            border: 4px solid #27ae60;
+            border-radius: 10px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.2s ease-in-out;
+            text-shadow: 2px 2px 0 #27ae60;
         }
-        button:hover {
-            background-color: #0056b3;
+
+        .button:hover {
+            background-color: #27ae60;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
         }
-        #qrcode {
-            margin-top: 1.5rem;
-            padding: 1rem;
-            border: 1px solid #eee;
-            border-radius: 4px;
-            display: inline-block;
-            min-height: 256px;
+        
+        .button:active {
+            transform: translateY(1px);
+        }
+
+        /* Classe pour cacher les éléments */
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Générateur de QR Code</h1>
-        <input type="url" id="urlInput" placeholder="https://www.example.com" required>
-        <button id="generateBtn">Générer le QR Code</button>
-        <div id="qrcode"></div>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <!-- Écran d'accueil -->
+        <div id="startScreen" class="game-overlay">
+            <h1>Flappy Oiseau</h1>
+            <p>Cliquez ou appuyez sur Espace pour voler</p>
+            <div id="startButton" class="button">Jouer</div>
+        </div>
+        <!-- Écran de fin de partie -->
+        <div id="gameOverScreen" class="game-overlay hidden">
+            <h1>Game Over</h1>
+            <p>Votre score : <span id="finalScore">0</span></p>
+            <div id="restartButton" class="button">Rejouer</div>
+        </div>
     </div>
 
-    <script src="code.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Éléments du DOM ---
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const startScreen = document.getElementById('startScreen');
+            const gameOverScreen = document.getElementById('gameOverScreen');
+            const startButton = document.getElementById('startButton');
+            const restartButton = document.getElementById('restartButton');
+            const finalScoreElement = document.getElementById('finalScore');
+            
+            // --- Constantes du jeu ---
+            const BIRD_WIDTH = 40;
+            const BIRD_HEIGHT = 30;
+            const PIPE_WIDTH = 60;
+            const PIPE_GAP = 150;
+            const GRAVITY = 0.5;
+            const FLAP_STRENGTH = -8;
+            const PIPE_SPEED = -3;
+            const PIPE_SPAWN_INTERVAL = 120; // En nombre de frames
+
+            // --- Variables d'état du jeu ---
+            let birdX, birdY, birdVelocity;
+            let pipes;
+            let score;
+            let frameCount;
+            let gameState; // 'start', 'playing', 'gameOver'
+
+            // --- Fonctions de dessin ---
+
+            // Dessine l'oiseau
+            function drawBird() {
+                ctx.fillStyle = '#f1c40f'; // Jaune
+                ctx.beginPath();
+                ctx.arc(birdX + BIRD_WIDTH / 2, birdY + BIRD_HEIGHT / 2, Math.min(BIRD_WIDTH, BIRD_HEIGHT) / 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Dessin d'un oeil simple
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(birdX + BIRD_WIDTH * 0.7, birdY + BIRD_HEIGHT * 0.4, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Dessine les tuyaux
+            function drawPipes() {
+                ctx.fillStyle = '#27ae60'; // Vert plus foncé
+                pipes.forEach(pipe => {
+                    // Tuyau du haut
+                    ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
+                    // Tuyau du bas
+                    ctx.fillRect(pipe.x, pipe.topHeight + PIPE_GAP, PIPE_WIDTH, canvas.height - pipe.topHeight - PIPE_GAP);
+                });
+            }
+
+            // Dessine le score
+            function drawScore() {
+                ctx.fillStyle = 'white';
+                ctx.font = '30px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText(score, canvas.width / 2, 50);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeText(score, canvas.width / 2, 50);
+            }
+
+            // --- Logique de mise à jour ---
+
+            // Met à jour la position de l'oiseau
+            function updateBird() {
+                birdVelocity += GRAVITY;
+                birdY += birdVelocity;
+
+                // Empêche l'oiseau de sortir par le haut
+                if (birdY < 0) {
+                    birdY = 0;
+                    birdVelocity = 0;
+                }
+            }
+
+            // Met à jour la position des tuyaux
+            function updatePipes() {
+                // Fait apparaître un nouveau tuyau
+                if (frameCount % PIPE_SPAWN_INTERVAL === 0) {
+                    const topHeight = Math.random() * (canvas.height - PIPE_GAP - 100) + 50;
+                    pipes.push({ x: canvas.width, topHeight: topHeight, passed: false });
+                }
+
+                // Déplace les tuyaux vers la gauche
+                pipes.forEach(pipe => {
+                    pipe.x += PIPE_SPEED;
+
+                    // Mise à jour du score
+                    if (!pipe.passed && pipe.x + PIPE_WIDTH < birdX) {
+                        score++;
+                        pipe.passed = true;
+                    }
+                });
+
+                // Supprime les tuyaux sortis de l'écran
+                pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH > 0);
+            }
+
+            // Détecte les collisions
+            function checkCollisions() {
+                // Collision avec le sol
+                if (birdY + BIRD_HEIGHT > canvas.height) {
+                    return true;
+                }
+
+                // Collision avec les tuyaux
+                for (const pipe of pipes) {
+                    if (birdX < pipe.x + PIPE_WIDTH &&
+                        birdX + BIRD_WIDTH > pipe.x &&
+                        (birdY < pipe.topHeight || birdY + BIRD_HEIGHT > pipe.topHeight + PIPE_GAP)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // --- Contrôle du jeu ---
+
+            // Initialise ou réinitialise le jeu
+            function resetGame() {
+                birdX = 50;
+                birdY = canvas.height / 2 - BIRD_HEIGHT / 2;
+                birdVelocity = 0;
+                pipes = [];
+                score = 0;
+                frameCount = 0;
+                gameState = 'start';
+            }
+
+            // Démarre le jeu
+            function startGame() {
+                gameState = 'playing';
+                startScreen.classList.add('hidden');
+                gameOverScreen.classList.add('hidden');
+                gameLoop();
+            }
+
+            // Termine la partie
+            function endGame() {
+                gameState = 'gameOver';
+                finalScoreElement.textContent = score;
+                gameOverScreen.classList.remove('hidden');
+            }
+
+            // L'oiseau bat des ailes
+            function flap() {
+                if (gameState === 'playing') {
+                    birdVelocity = FLAP_STRENGTH;
+                }
+            }
+            
+            // --- Boucle de jeu principale ---
+            function gameLoop() {
+                if (gameState === 'gameOver') {
+                    return; // Arrête la boucle si le jeu est terminé
+                }
+
+                // 1. Mettre à jour l'état du jeu
+                if (gameState === 'playing') {
+                    updateBird();
+                    updatePipes();
+                    if (checkCollisions()) {
+                        endGame();
+                        return; // Sort de la boucle pour cet frame
+                    }
+                    frameCount++;
+                }
+
+                // 2. Dessiner les éléments
+                // Fond
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Efface le canvas
+                
+                // Dessin des éléments
+                drawPipes();
+                drawBird();
+                
+                if (gameState === 'playing') {
+                   drawScore();
+                }
+
+                // 3. Répéter
+                requestAnimationFrame(gameLoop);
+            }
+
+
+            // --- Écouteurs d'événements ---
+            startButton.addEventListener('click', () => {
+                resetGame();
+                startGame();
+            });
+
+            restartButton.addEventListener('click', () => {
+                resetGame();
+                startGame();
+            });
+
+            // Contrôles pour l'oiseau
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    flap();
+                }
+            });
+
+            canvas.addEventListener('click', flap);
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Empêche le comportement par défaut (zoom, etc.)
+                flap();
+            });
+
+
+            // --- Démarrage initial ---
+            resetGame();
+            // On dessine une première fois l'oiseau pour l'écran d'accueil
+            drawBird(); 
+        });
+    </script>
 </body>
 </html>
